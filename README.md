@@ -1,5 +1,34 @@
 # Corona Asesor — Agente de revestimientos
 
+> Proyecto de hackathon en equipo (**AgentSprint by ReshapeX**, julio 2026).
+> Repositorio original: [DevSolidloper/corona-agent](https://github.com/DevSolidloper/corona-agent).
+> Equipo: Santiago Marín Cardona, DevSolidloper y Daniel Garzón.
+
+## Mi contribución
+
+Estos puntos salen de mis commits en el repositorio original (`git log --author="Daniel Garzon"`); el resto del proyecto (catálogo y carga de datos, RAG con Chroma, motor de reglas, cálculos, tests y la base del orquestador) fue trabajo de mis compañeros.
+
+- **Orquestador con Gemini:** adapté el loop de tool use de `src/agent/orchestrator.py` a function calling de Gemini (`google-genai`) y dejé el esquema de herramientas independiente del proveedor (`AGENT_TOOLS`), junto con `src/config.py` y `.env.example`.
+- **Contexto institucional bajo demanda:** quité el contexto de la empresa del system prompt y lo expuse como la tool `consultar_contexto_institucional` (por sección), para no gastar tokens en cada turno.
+- **UI Streamlit:** rediseñé `app.py` con la paleta de marca de Corona y agregué el tema en `.streamlit/config.toml`.
+- **Frontend web y API:** construí la interfaz Next.js/React/TypeScript (`web/`: chat, panel de candidatos, traza visual de tools, descarga de cotización en PDF, modo claro/oscuro) y el backend puente FastAPI (`api_server.py`, con sesión por cookie y CORS) que expone el mismo `CoronaAgent` sin duplicar lógica.
+- **Scripts de demo:** `start-demo.ps1` y `check-demo.ps1` para levantar y verificar backend y frontend.
+- **Documentación de demo:** guiones de demo y de cobertura de tools en `docs/`, y la actualización de este README con la arquitectura de dos interfaces.
+
+## Cómo evitamos alucinaciones
+
+El LLM no es fuente de datos: solo entiende la conversación, decide qué herramienta llamar y explica el resultado. Cada afirmación con número, producto o compatibilidad sale de una herramienta real (`src/agent/tools.py`, sin mocks):
+
+| Qué afirma el agente | De dónde sale | Código |
+|---|---|---|
+| Productos, precios, disponibilidad, m² por caja | **DuckDB** en modo solo lectura | `buscar_revestimientos`, `buscar_pegantes`, `buscar_boquillas`, `get_producto` |
+| Justificación técnica | **Chroma (RAG)**: fragmentos de fichas técnicas con metadatos (`sku`, `section`, `pdf_id`) para citar; búsqueda semántica y, si falla, búsqueda por palabra clave | `buscar_evidencia` |
+| Compatibilidad | **Motor de reglas** (ambiente, humedad, tráfico, pegante, junta, disponibilidad). El estado global es el peor de las reglas y, si falta un dato, devuelve *Requiere revisión* en vez de suponer que cumple | `validar_compatibilidad` |
+| Áreas, cajas, pegante, boquilla, presupuesto | **Funciones puras y deterministas**, que devuelven también el desglose del cálculo y marcan `requiere_revision` si falta un dato | `calcular_*` |
+| Datos de la empresa (contacto, garantías, links) | Contexto institucional en JSON, consultado por sección | `consultar_contexto_institucional` |
+
+Además, el system prompt (`src/agent/prompts.py`) prohíbe inventar precios, disponibilidad, rendimientos, medidas o compatibilidades, y exige usar una herramienta para cualquier número. Cada llamada a una tool queda registrada en la traza (`trace`), que ambas interfaces muestran para poder auditar de dónde salió cada respuesta.
+
 Agente de IA que ayuda a planear la instalación de **pisos y paredes** y sus
 **pegantes y boquillas** con productos de **Corona Colombia**. Entiende el
 proyecto del usuario, pide lo que falta, consulta el catálogo real, calcula
